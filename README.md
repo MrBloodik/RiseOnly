@@ -130,4 +130,4 @@ See `CONTRIBUTING.md` for detailed guidelines.
 
 ## 📄 License
 
-Licensed under the MIT License. See `LICENSE` for details.
+Licensed under the License. See `LICENSE` for details.
