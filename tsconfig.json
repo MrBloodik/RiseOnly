@@ -1,0 +1,48 @@
+{
+	"extends": "expo/tsconfig.base",
+	"compilerOptions": {
+		"strict": true,
+		"target": "esnext",
+		"moduleResolution": "node",
+		"esModuleInterop": true,
+		"resolveJsonModule": true,
+		"allowSyntheticDefaultImports": true,
+		"baseUrl": ".",
+		"paths": {
+			"@app/*": ["src/app/*"],
+			"@pages/*": ["src/pages/*"],
+
+			"@images/*": ["src/assets/images/*"],
+			"@icons/*": ["src/assets/icons/*"],
+			"@fonts/*": ["src/assets/fonts/*"],
+			"@sounds/*": ["src/assets/sounds/*"],
+			"@videos/*": ["src/assets/videos/*"],
+			"@styles/*": ["src/assets/styles/*"],
+			"@animations/*": ["src/assets/animations/*"],
+
+			"@shared/*": ["src/shared/*"],
+			"@ui": ["src/shared/ui"],
+			"@ui/*": ["src/shared/ui/*"],
+			"@lib/*": ["src/shared/lib/*"],
+
+			"@stores/*": ["src/stores/*"],
+
+			"@locales/*": ["src/shared/locales/*"],
+
+			"@schemas/*": ["src/shared/schemas/*"],
+
+			"@api/*": ["src/shared/api/*"],
+			"@config/*": ["src/shared/config/*"],
+
+			"@widgets/*": ["src/widgets/*"],
+			"@modals": ["src/widgets/modals"],
+			"@bottomsheets": ["src/widgets/bottomsheets"],
+			"@navigations": ["src/widgets/navigations"],
+			"@headers": ["src/widgets/headers"],
+
+			"@components/*": ["src/components/*"],
+			"@hooks/*": ["src/shared/hooks/*"]
+		}
+	},
+	"exclude": ["node_modules", "babel.config.js", "metro.config.js"]
+}

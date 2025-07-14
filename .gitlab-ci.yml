@@ -1,0 +1,321 @@
+stages:
+    - build
+    - deploy
+
+variables:
+    EAS_USERNAME: 'nics51'
+    EAS_PASSWORD: $EAS_PASSWORD
+    FASTLANE_USER: $FASTLANE_USER
+    FASTLANE_PASSWORD: $FASTLANE_PASSWORD
+    FASTLANE_APPLE_APPLICATION_SPECIFIC_PASSWORD: $FASTLANE_APPLE_APPLICATION_SPECIFIC_PASSWORD
+    FASTLANE_DONT_STORE_PASSWORD: 1
+    FASTLANE_SKIP_UPDATE_CHECK: 1
+    # Переменные для API ключа App Store Connect
+    ASC_KEY_ID: $ASC_KEY_ID
+    ASC_ISSUER_ID: $ASC_ISSUER_ID
+    ASC_PRIVATE_KEY: $ASC_PRIVATE_KEY
+    # EAS токены
+    EXPO_TOKEN: $EXPO_TOKEN
+    # Дополнительные настройки для обхода ошибок API
+    SPACESHIP_AVOID_XCODE_API: 1
+
+build_ios:
+    image: node:20
+    stage: build
+    script:
+        - npm install -g eas-cli
+        - yarn install --ignore-engines --legacy-peer-deps
+        # Проверка и установка зависимостей для сборки iOS
+        - |
+            echo "Настройка необходимых зависимостей для Expo и React Native..."
+            apt-get update -y
+            apt-get install -y ruby ruby-dev git
+            gem install cocoapods -v 1.16.2
+            # Создаем моковый файл ReactAppDependencyProvider для поддержки сборки
+            mkdir -p ios/mock_pods
+            touch ios/mock_pods/empty.m
+            touch ios/mock_pods/empty.h
+            # Обновляем зависимости для ReactAppDependencyProvider
+            npm install expo-modules-autolinking --legacy-peer-deps
+            npm install expo-dev-client --legacy-peer-deps
+            # Установка переменных окружения для Expo
+            export EAS_LOCAL_BUILD_ARTIFACTS_DIR=./artifacts
+            export RCT_NEW_ARCH_ENABLED=1
+            export EX_DEV_CLIENT_NETWORK_INSPECTOR=1
+        # Используем правильный подход к аутентификации
+        - if [ ! -z "$EXPO_TOKEN" ]; then
+          echo "Using EXPO_TOKEN for authentication";
+          npx eas-cli whoami || npx eas-cli login --non-interactive;
+          else
+          echo "Using username/password for authentication";
+          npx eas-cli login -u $EAS_USERNAME -p $EAS_PASSWORD --non-interactive;
+          fi
+        # Проверяем авторизацию
+        - npx eas-cli whoami
+        - npx eas-cli build --platform ios --non-interactive --no-wait
+        - echo "Build submitted to EAS. It will be available in App Store Connect when complete."
+    only:
+        - main
+
+deploy_ios:
+    image: node:20
+    stage: deploy
+    script:
+        - apt-get update -y
+        - apt-get install -y ruby ruby-dev curl jq
+        # Устанавливаем eas-cli для загрузки последней сборки
+        - npm install -g eas-cli
+        # Мы находимся в корне проекта, переходим в директорию ios
+        - cd ios
+        # Устанавливаем точную версию bundler, требуемую Gemfile.lock
+        - gem install bundler:1.17.2
+        # Проверяем, что ключ App Store Connect переменные окружения установлены
+        - 'echo "ASC_KEY_ID is set: $([[ ! -z \"$ASC_KEY_ID\" ]] && echo ''YES'' || echo ''NO'')"'
+        - 'echo "ASC_ISSUER_ID is set: $([[ ! -z \"$ASC_ISSUER_ID\" ]] && echo ''YES'' || echo ''NO'')"'
+        - 'echo "ASC_PRIVATE_KEY length: ${#ASC_PRIVATE_KEY}"'
+        # Вход в EAS и загрузка последней сборки
+        - |
+            echo "Получаем последнюю iOS сборку из EAS..."
+            cd ..
+            if [ ! -z "$EXPO_TOKEN" ]; then
+              echo "Авторизация через EXPO_TOKEN..."
+              # Используем EXPO_TOKEN для авторизации и проверяем успешность
+              npx eas-cli whoami || npx eas-cli login
+            else
+              echo "Авторизация через логин/пароль..."
+              npx eas-cli login -u $EAS_USERNAME -p $EAS_PASSWORD
+            fi
+            npx eas-cli whoami
+
+            # Получаем список сборок и выбираем последнюю для iOS
+            echo "Получаем список сборок..."
+            # Определяем ID проекта
+            PROJECT_ID="edc0ccdf-5c52-417b-9a8c-f271c84b536a"
+            BUILDS=$(npx eas-cli build:list --platform=ios --status=finished --limit=20 --json --project-id=$PROJECT_ID)
+
+            # Находим последний ID сборки iOS
+            BUILD_ID=$(echo $BUILDS | jq -r '.[0].id')
+            if [ -z "$BUILD_ID" ] || [ "$BUILD_ID" == "null" ]; then
+              echo "Не удалось найти подходящую сборку iOS. Проверьте статус сборки в EAS."
+              exit 1
+            fi
+
+            echo "Найдена сборка с ID: $BUILD_ID"
+
+            # Создаем директорию для загрузки сборки
+            mkdir -p builds
+
+            # Загружаем сборку
+            echo "Загружаем сборку с ID: $BUILD_ID..."
+            npx eas-cli build:download --build-id=$BUILD_ID --output=./builds/app.ipa --platform=ios
+
+            if [ ! -f "./builds/app.ipa" ]; then
+              echo "Не удалось загрузить IPA файл"
+              exit 1
+            fi
+
+            echo "IPA файл успешно загружен в ./builds/app.ipa"
+
+            # Возвращаемся в директорию ios
+            cd ios
+        # Форматируем ASC_PRIVATE_KEY для совместимости с OpenSSL в Ruby 2.7
+        # Это решит проблему "invalid curve name"
+        - |
+            if [[ ! -z "$ASC_PRIVATE_KEY" ]]; then
+              echo "Creating properly formatted key file..."
+              mkdir -p ~/.appstoreconnect/private_keys
+              echo "$ASC_PRIVATE_KEY" > ~/.appstoreconnect/private_keys/AuthKey_$ASC_KEY_ID.p8
+              chmod 600 ~/.appstoreconnect/private_keys/AuthKey_$ASC_KEY_ID.p8
+              echo "Key file created"
+              # Экспортируем переменную с путем к файлу ключа
+              export ASC_KEY_PATH=~/.appstoreconnect/private_keys/AuthKey_$ASC_KEY_ID.p8
+            fi
+        # Создаем новый Fastfile, адаптированный под версию fastlane 2.211.0
+        - |
+            echo "Создаем новый Fastfile для CI окружения..."
+            mkdir -p fastlane
+            cat > fastlane/Fastfile <<EOL
+            default_platform(:ios)
+
+            platform :ios do
+              desc "Push a new beta build to TestFlight"
+              lane :beta do
+                # Отключаем обращение к prices в API
+                ENV["SPACESHIP_AVOID_XCODE_API"] = "1"
+                
+                app_identifier = "com.nics51.riseonly"
+                app_store_connect_api_key(
+                  key_id: ENV["ASC_KEY_ID"],
+                  issuer_id: ENV["ASC_ISSUER_ID"],
+                  key_filepath: ENV["ASC_KEY_PATH"] || nil,
+                  in_house: false
+                )
+                
+                puts "Загружаем сборку в TestFlight для приложения #{app_identifier}"
+                x
+                ipa_path = "../builds/app.ipa"
+                
+                if !File.exist?(ipa_path)
+                  UI.user_error!("IPA файл не найден по пути: #{ipa_path}")
+                end
+                
+                puts "Используем IPA файл: #{ipa_path}"
+                                
+                # Прямой вызов upload_to_testflight с указанием пути к IPA файлу
+                # для обхода ошибки с 'prices' в API
+                upload_to_testflight(
+                  app_identifier: app_identifier,
+                  ipa: ipa_path,
+                  skip_submission: false,
+                  distribute_external: true,
+                  skip_waiting_for_build_processing: true,
+                  changelog: "Новая версия приложения с улучшениями",
+                  groups: ["External Testers"],
+                  demo_account_required: false,
+                  beta_app_review_info: {
+                    contact_email: ENV["FASTLANE_USER"],
+                    contact_first_name: "Dulat",
+                    contact_last_name: "CEO",
+                    demo_account_name: "",
+                    demo_account_password: "",
+                    notes: "Новая версия приложения от EAS"
+                  }
+                )
+                
+                puts "Сборка успешно отправлена в TestFlight!"
+              end
+            end
+            EOL
+            echo "Fastfile создан"
+        # Создаем конфигурацию для Fastlane
+        - |
+            echo "Создаем Appfile для CI окружения..."
+            cat > fastlane/Appfile <<EOL
+            app_identifier("com.nics51.riseonly")
+            apple_id(ENV["FASTLANE_USER"])
+
+            itc_team_id("127794546")
+            team_id("ABWL5WMVMT")
+            EOL
+            echo "Appfile создан"
+        # Создаем новый Gemfile без фиксированных версий для совместимости с окружением в CI
+        - |
+            echo "Создаем новый Gemfile для CI окружения..."
+            cat > Gemfile <<EOL
+            source "https://rubygems.org"
+
+            gem "fastlane", "~> 2.211.0" # Используем более новую версию
+            gem "cocoapods", "1.16.2"     # Используем точную версию, которая работает локально
+            gem "fastlane-plugin-firebase_app_distribution"
+            gem "ffi", "< 1.15.5"  # Используем версию, совместимую с Ruby 2.7
+            EOL
+            echo "Gemfile создан"
+        # Удаляем старый Gemfile.lock, чтобы избежать конфликтов
+        - rm -f Gemfile.lock
+        # Явно устанавливаем cocoapods нужной версии
+        - gem install cocoapods -v 1.16.2
+        # Обновляем репозитории podspecs
+        - pod repo update
+        # Проверяем и устанавливаем зависимости expo
+        - npm install expo-modules-autolinking --legacy-peer-deps
+        - npm install -g expo-cli
+        # Установка переменных окружения для Expo
+        - export RCT_NEW_ARCH_ENABLED=1
+        - export EX_DEV_CLIENT_NETWORK_INSPECTOR=1
+        # Добавляем источники для недостающих спецификаций
+        - |
+            echo "Добавляем специальный репозиторий для ReactAppDependencyProvider..."
+            mkdir -p ~/.cocoapods/repos/expo
+            git clone --depth 1 https://github.com/expo/expo.git ~/.cocoapods/repos/expo
+            cat > ~/.cocoapods/repos/expo/ReactAppDependencyProvider.podspec <<EOL
+            Pod::Spec.new do |s|
+              s.name           = 'ReactAppDependencyProvider'
+              s.version        = '1.0.0'
+              s.summary        = 'Provides dependencies for React Native apps'
+              s.author         = 'Expo'
+              s.homepage       = 'https://github.com/expo/expo'
+              s.platform       = :ios, '13.0'
+              s.source         = { :git => 'https://github.com/expo/expo.git' }
+              s.source_files   = 'ios/**/*.{h,m}'
+              s.preserve_paths = 'ios/**/*'
+              s.dependency 'React-Core'
+            end
+            EOL
+        # Устанавливаем дополнительные источники в Podfile
+        - |
+            if [ -f "Podfile" ]; then
+              echo "Модифицируем Podfile для добавления источников..."
+              sed -i.bak '1s/^/source "file:\/\/\/~\/.cocoapods\/repos\/expo"\nsource "https:\/\/github.com\/CocoaPods\/Specs.git"\n/' Podfile
+            fi
+        # Устанавливаем зависимости и запускаем fastlane
+        - bundle install
+        # Проверяем установленные версии
+        - bundle exec gem list
+        # Явная установка подов через bundle для решения проблемы с ReactAppDependencyProvider
+        - cd ../ios
+        - bundle exec pod install --verbose || ( echo "Устанавливаем зависимости Expo Dev Client..." && npm install -g expo-cli && npx expo install expo-dev-client && bundle exec pod install --verbose )
+        # Возвращаемся обратно
+        - cd ..
+        # Запускаем деплой в TestFlight
+        - cd ios && bundle exec fastlane beta
+    only:
+        - main
+    when: manual # Позволяет вручную запускать этот этап после того, как сборка в EAS завершена
+
+# Добавляем отдельный job для проверки локальной сборки, если CI/CD деплой не работает
+check_local_build:
+    image: node:20
+    stage: build
+    script:
+        - apt-get update -y
+        - apt-get install -y ruby ruby-dev
+        - gem install bundler:1.17.2
+        - gem install cocoapods -v 1.16.2
+        - yarn install --ignore-engines
+        - cd ios
+        # Обновляем репозитории podspecs
+        - pod repo update
+        # Устанавливаем переменные окружения для Expo
+        - export RCT_NEW_ARCH_ENABLED=1
+        - export EX_DEV_CLIENT_NETWORK_INSPECTOR=1
+        # Проверяем проблемы с hermes
+        - mkdir -p hermes_check
+        - echo "Проверка модуля hermes-engine..."
+        - ls -la ../node_modules/react-native/sdks/hermes-engine || echo "Нет доступа к директории hermes-engine"
+        # Добавляем источники для недостающих спецификаций
+        - |
+            echo "Добавляем специальный репозиторий для ReactAppDependencyProvider..."
+            mkdir -p ~/.cocoapods/repos/expo
+            git clone --depth 1 https://github.com/expo/expo.git ~/.cocoapods/repos/expo
+            cat > ~/.cocoapods/repos/expo/ReactAppDependencyProvider.podspec <<EOL
+            Pod::Spec.new do |s|
+              s.name           = 'ReactAppDependencyProvider'
+              s.version        = '1.0.0'
+              s.summary        = 'Provides dependencies for React Native apps'
+              s.author         = 'Expo'
+              s.homepage       = 'https://github.com/expo/expo'
+              s.platform       = :ios, '13.0'
+              s.source         = { :git => 'https://github.com/expo/expo.git' }
+              s.source_files   = 'ios/**/*.{h,m}'
+              s.preserve_paths = 'ios/**/*'
+              s.dependency 'React-Core'
+            end
+            EOL
+        # Устанавливаем pod непосредственно через bundle
+        - bundle init
+        - echo 'source "https://rubygems.org"' > Gemfile
+        - echo 'gem "cocoapods", "1.16.2"' >> Gemfile
+        - bundle install
+        # Устанавливаем дополнительные источники в Podfile
+        - |
+            if [ -f "Podfile" ]; then
+              echo "Модифицируем Podfile для добавления источников..."
+              sed -i.bak '1s/^/source "file:\/\/\/~\/.cocoapods\/repos\/expo"\nsource "https:\/\/github.com\/CocoaPods\/Specs.git"\n/' Podfile
+            fi
+        - bundle exec pod install --verbose
+        - echo "Проверка Podfile и Podfile.lock"
+        - ls -la Podfile*
+    only:
+        - schedules
+        - web
+    when: manual

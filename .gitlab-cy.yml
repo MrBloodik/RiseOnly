@@ -1,0 +1,40 @@
+stages:
+    - build
+    - deploy
+
+variables:
+    EAS_USERNAME: 'nics51'
+    EAS_PASSWORD: $EAS_PASSWORD
+    FASTLANE_USER: $FASTLANE_USER
+    FASTLANE_PASSWORD: $FASTLANE_PASSWORD
+    FASTLANE_APPLE_APPLICATION_SPECIFIC_PASSWORD: $FASTLANE_APPLE_APPLICATION_SPECIFIC_PASSWORD
+    FASTLANE_DONT_STORE_PASSWORD: 1
+    FASTLANE_SKIP_UPDATE_CHECK: 1
+
+before_script:
+    - apt-get update -y
+    - apt-get install -y ruby ruby-dev
+    - gem install fastlane -v 2.204.0
+
+build_ios:
+    image: node:18
+    stage: build
+    script:
+        - npm install -g yarn eas-cli
+        - yarn install
+        - npx eas-cli login -u $EAS_USERNAME -p $EAS_PASSWORD --non-interactive
+        - npx eas-cli build --platform ios --non-interactive --profile production --no-wait
+        - echo "Build submitted to EAS. It will be available in App Store Connect when complete."
+    only:
+        - main
+
+deploy_ios:
+    image: ruby:2.7
+    stage: deploy
+    script:
+        - cd ios
+        - bundle install
+        - bundle exec fastlane beta
+    only:
+        - main
+    when: manual # Позволяет вручную запускать этот этап после того, как сборка в EAS завершена

@@ -1,0 +1,10 @@
+export { CustomizationSettings } from "./CustomizationSettings/CustomizationSettings";
+export { ModerationSettings } from './ModerationSettings/ModerationSettings';
+export { BeModeratorSettings } from './ModerationSettings/pages/BeModeratorSettings/BeModeratorSettings';
+export { MyModerationRequestsSettings } from './ModerationSettings/pages/MyModerationRequestsSettings/MyModerationRequestsSettings';
+export { PrivacySetting } from "./PrivacySettings/PrivacySetting";
+export { PrivacySettings } from "./PrivacySettings/PrivacySettings";
+export { ProfileSettings } from "./ProfileSettings/ProfileSettings";
+export { SessionsSettings } from "./SessionsSettings/SessionsSettings";
+export { Settings } from "./Settings";
+export { SubscriptionSettings } from "./SubscriptionSettings/SubscriptionSettings";

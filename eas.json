@@ -1,0 +1,40 @@
+{
+	"cli": {
+		"version": ">= 15.0.10",
+		"appVersionSource": "remote"
+	},
+	"build": {
+		"ios": {
+			"node": "20.18.3",
+			"yarn": "1.22.22",
+			"resourceClass": "medium",
+			"credentialsSource": "local",
+			"prebuildCommand": "yarn install --legacy-peer-deps && node scripts/patch-autosizing-stack.js && cd ios && pod install"
+		},
+		"development": {
+			"developmentClient": true,
+			"distribution": "internal"
+		},
+		"preview": {
+			"distribution": "internal"
+		},
+		"production": {
+			"autoIncrement": true,
+			"developmentClient": false,
+			"node": "20.18.3",
+			"yarn": "1.22.22",
+			"env": {
+				"EXPO_NO_DEV_CLIENT": "1"
+			},
+			"android": {
+				"resourceClass": "medium"
+			},
+			"ios": {
+				"resourceClass": "medium"
+			}
+		}
+	},
+	"submit": {
+		"production": {}
+	}
+}
