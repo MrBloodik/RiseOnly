@@ -1,87 +1,133 @@
-# React Native iOS build troubleshooting
+# RiseOnly
 
-## Проблема с ReactAppDependencyProvider
+**RiseOnly** is a next-generation social networking platform that merges real-time messaging, professional networking, and social feed features into one cohesive experience. Built using Feature‑Sliced Design (FSD) for maximum scalability and maintainability.
 
-При сборке iOS с использованием Expo и EAS может возникать ошибка установки pods:
+---
+
+## 🚀 Core Features
+
+* **Instant Messaging & Channels**
+
+  * Real-time one-on-one and group chats inspired by Telegram.
+  * Public and private channels to broadcast news or host community discussions.
+
+* **Job Search & Professional Networking**
+
+  * Integrated job board with advanced filters (role, location, remote).
+  * User profiles support resumes, portfolios, and skills endorsements.
+  * Algorithmic job recommendations based on your experience and interests.
+
+* **Social Feed**
+
+  * Post text updates, images, videos, and long-form articles.
+  * Engage with content via likes, comments, and reshares.
+
+* **Industry Communities & Events**
+
+  * Join or create groups for IT, design, marketing, HR, and more.
+  * Schedule and host webinars, workshops, and meetups.
+
+* **Learning & Mentorship**
+
+  * Access in-app courses and tutorials from partner providers.
+  * Connect with mentors for one-on-one guidance and career advice.
+
+---
+
+## 🏗 Architecture (Feature‑Sliced Design)
+
+We follow the FSD approach to keep code organized by features, not by technical layers:
 
 ```
-[!] Unable to find a specification for `ReactAppDependencyProvider` depended upon by `expo-dev-launcher`
+src/
+├── app/              # Entry point, global providers (state, i18n, theming)
+├── pages/            # Top-level route components
+├── widgets/          # High-level UI blocks combining features and entities
+├── features/         # Isolated business logic and actions (auth, comments)
+├── entities/         # Data models, API integrations, and state slices
+├── shared/           # Reusable utilities, UI components, and styles
+└── processes/        # Long-running scenarios (WebSocket connection, background sync)
 ```
 
-## Решения
+This structure ensures:
 
-### 1. Локальное решение
+* **Clear responsibility boundaries**
+* **Easy onboarding** for new developers
+* **Scalable codebase** as features grow
 
-Для локальной разработки можно выполнить следующие шаги:
+---
 
-1. Установить необходимые зависимости:
+## ⚙️ Tech Stack
 
-```bash
-npm install expo-modules-autolinking --legacy-peer-deps
-npm install expo-dev-client --legacy-peer-deps
-```
+* **Frontend (Web)**: React (TypeScript), Tailwind CSS, React Router
+* **Mobile**: React Native (Expo), Reanimated, React Navigation
+* **Backend**: Node.js (Express), GraphQL, PostgreSQL, Rust microservices
+* **Realtime**: WebSocket (Socket.IO) / MQTT
+* **State Management**: MobX + mobx-toolbox
+* **DevOps**: Docker, Kubernetes, Helm, GitHub Actions (CI/CD)
+* **Monitoring & Logging**: Prometheus, Grafana, ELK Stack
 
-2. Создать локальный podspec для ReactAppDependencyProvider:
+---
 
-```bash
-mkdir -p ~/.cocoapods/repos/expo
-git clone --depth 1 https://github.com/expo/expo.git ~/.cocoapods/repos/expo
-cat > ~/.cocoapods/repos/expo/ReactAppDependencyProvider.podspec <<EOL
-Pod::Spec.new do |s|
-  s.name           = 'ReactAppDependencyProvider'
-  s.version        = '1.0.0'
-  s.summary        = 'Provides dependencies for React Native apps'
-  s.author         = 'Expo'
-  s.homepage       = 'https://github.com/expo/expo'
-  s.platform       = :ios, '13.0'
-  s.source         = { :git => 'https://github.com/expo/expo.git' }
-  s.source_files   = 'ios/**/*.{h,m}'
-  s.preserve_paths = 'ios/**/*'
-  s.dependency 'React-Core'
-end
-EOL
-```
+## 🖥️ Local Setup
 
-3. Добавить источники в Podfile:
+> **Note:** The backend services cannot be run locally by community users. A running demo environment is provided instead.
 
-```ruby
-source "file:///~/.cocoapods/repos/expo"
-source "https://github.com/CocoaPods/Specs.git"
+1. **Clone the repository**
 
-# Оставшаяся часть вашего Podfile
-```
+   ```bash
+   git clone https://github.com/your-org/riseonly.git
+   cd riseonly
+   ```
+2. **Install dependencies**
 
-### 2. Решение для CI/CD (EAS Build)
+   ```bash
+   yarn install   # Installs all workspace packages: backend, frontend, mobile
+   ```
+3. **Configuration**
 
-1. Настроить `eas.json` с prebuild командой:
+   * Copy `.env.example` to `.env` in the `frontend/` and `mobile/` folders.
+   * Fill in public API endpoints and environment variables as provided in the demo documentation.
+4. **Run the applications**
 
-```json
-{
-	"build": {
-		"production": {
-			"ios": {
-				"cocoapods": {
-					"podfileProperties": {
-						"reactAppDependencyPath": "../node_modules/react-native",
-						"expo.jsEngine": "hermes"
-					}
-				},
-				"prebuildCommand": "cd ios && echo 'source \"https://github.com/CocoaPods/Specs.git\"' > Podfile.additions && cat Podfile.additions Podfile > Podfile.new && mv Podfile.new Podfile && cd .. && (npx pod-install || (npx expo install expo-dev-client && npx pod-install))"
-			}
-		}
-	}
-}
-```
+   ```bash
+   # Web frontend
+   cd frontend && yarn start
 
-2. Установить переменные окружения:
+   # Mobile app (Expo)
+   cd ../mobile && yarn start
+   ```
 
-```bash
-export RCT_NEW_ARCH_ENABLED=1
-export EX_DEV_CLIENT_NETWORK_INSPECTOR=1
-```
+*Backend-specific setup is restricted; instead, you can access a hosted demo or request a video walkthrough.*
 
-### 3. Альтернативные подходы
+---
 
--   Использовать более старую версию Expo SDK (если это возможно)
--   Отключить expo-dev-launcher в режиме production
--   Обновить все зависимости React Native и Expo до последних совместимых версий
+## 📦 Production & Demo Access
+
+Production deployment details and access are available upon request:
+
+* **Demo Environment**: A fully functional staging instance URL.
+* **Video Walkthrough**: Pre-recorded demo of all features, deployment pipeline, and infrastructure overview.
+* **Credentials**: Temporary accounts for testing messaging, job search, and social feed features.
+
+Just open an issue or contact the maintainers to gain access.
+
+---
+
+## 🤝 Contributing
+
+Contributions are welcome! Please adhere to these steps:
+
+1. Fork the repository.
+2. Create a feature branch: `git checkout -b feat/your-feature`.
+3. Commit changes: `git commit -m "feat: ..."`.
+4. Push branch: `git push origin feat/your-feature`.
+5. Open a pull request and reference related issues.
+
+See `CONTRIBUTING.md` for detailed guidelines.
+
+---
+
+## 📄 License
+
+Licensed under the MIT License. See `LICENSE` for details.
