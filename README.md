@@ -88,6 +88,7 @@ This structure ensures:
 
    * Copy `.env.example` to `.env` in the `frontend/` and `mobile/` folders.
    * Fill in public API endpoints and environment variables as provided in the demo documentation.
+     
 4. **Run the applications**
 
    ```bash
