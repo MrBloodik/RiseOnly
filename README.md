@@ -79,11 +79,13 @@ This structure ensures:
    git clone https://github.com/your-org/riseonly.git
    cd riseonly
    ```
+   
 2. **Install dependencies**
 
    ```bash
    yarn install   # Installs all workspace packages: backend, frontend, mobile
    ```
+   
 3. **Configuration**
 
    * Copy `.env.example` to `.env` in the `frontend/` and `mobile/` folders.
